@@ -4,7 +4,7 @@ import org.owntracks.android.injection.components.AppComponentProvider;
 import org.owntracks.android.injection.components.AppComponent;
 import org.owntracks.android.injection.components.DaggerAppComponent;
 import org.owntracks.android.injection.qualifier.AppContext;
-import org.owntracks.android.services.BackgroundService;
+import org.owntracks.android.services.LocationService;
 import org.owntracks.android.services.MessageProcessor;
 import org.owntracks.android.support.Parser;
 import org.owntracks.android.support.Preferences;
@@ -96,11 +96,11 @@ public class App extends DaggerApplication  {
     }
 
     public void startBackgroundServiceCompat(final @NonNull Context context) {
-        startBackgroundServiceCompat(context, (new Intent(context, BackgroundService.class)));
+        startBackgroundServiceCompat(context, (new Intent(context, LocationService.class)));
     }
 
     public void startBackgroundServiceCompat(final @NonNull Context context, final @Nullable String action) {
-        startBackgroundServiceCompat(context, (new Intent(context, BackgroundService.class)).setAction(action));
+        startBackgroundServiceCompat(context, (new Intent(context, LocationService.class)).setAction(action));
     }
 
     public void startBackgroundServiceCompat(final @NonNull Context context, @NonNull final Intent intent) {

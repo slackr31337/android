@@ -70,7 +70,7 @@
         <activity
             android:name=".ui.regions.RegionsActivity"
             android:label="Regions"
-            android:launchMode="singleTop"></activity>
+            android:launchMode="singleTop" />
         <activity
             android:name=".ui.region.RegionActivity"
             android:label="Region"
@@ -156,7 +156,7 @@
         </provider>
 
         <service
-            android:name=".services.BackgroundService"
+            android:name=".services.LocationService"
             android:enabled="true"
             android:exported="true"
             tools:ignore="ExportedService">

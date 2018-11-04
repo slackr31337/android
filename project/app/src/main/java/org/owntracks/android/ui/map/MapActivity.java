@@ -1,8 +1,13 @@
 package org.owntracks.android.ui.map;
 
+import android.Manifest;
 import android.arch.lifecycle.Observer;
 import android.content.ActivityNotFoundException;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.pm.PackageManager;
 import android.location.Location;
 import android.net.Uri;
 import android.os.Bundle;
@@ -11,7 +16,10 @@ import android.support.annotation.Nullable;
 import android.support.design.widget.AppBarLayout;
 import android.support.design.widget.BottomSheetBehavior;
 import android.support.design.widget.CoordinatorLayout;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.LocalBroadcastManager;
 import android.support.v7.widget.PopupMenu;
+import android.util.Log;
 import android.view.Gravity;
 import android.view.Menu;
 import android.view.MenuInflater;
@@ -20,6 +28,13 @@ import android.view.View;
 import android.widget.LinearLayout;
 import android.widget.Toast;
 
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.api.GoogleApiClient;
+import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.LocationCallback;
+import com.google.android.gms.location.LocationRequest;
+import com.google.android.gms.location.LocationResult;
+import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
@@ -32,6 +47,7 @@ import org.owntracks.android.R;
 import org.owntracks.android.databinding.UiMapBinding;
 import org.owntracks.android.model.FusedContact;
 import org.owntracks.android.services.LocationProcessor;
+import org.owntracks.android.services.LocationService;
 import org.owntracks.android.services.MessageProcessorEndpointHttp;
 import org.owntracks.android.support.ContactImageProvider;
 import org.owntracks.android.support.GeocodingProvider;
@@ -41,6 +57,7 @@ import org.owntracks.android.ui.base.BaseActivity;
 import org.owntracks.android.ui.welcome.WelcomeActivity;
 
 import java.util.WeakHashMap;
+import java.util.concurrent.TimeUnit;
 
 import javax.inject.Inject;
 
@@ -63,13 +80,24 @@ public class MapActivity extends BaseActivity<UiMapBinding, MapMvvm.ViewModel> i
     protected ContactImageProvider contactImageProvider;
 
     @Inject
+    protected LocationProcessor locationProcessor;
+
+    @Inject
     protected GeocodingProvider geocodingProvider;
+    private LocationCallback locationCallback;
+    private GoogleApiClient mGoogleApiClient;
+
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
-
+        locationCallback = new LocationCallback() {
+            @Override
+            public void onLocationResult(LocationResult locationResult) {
+                super.onLocationResult(locationResult);
+                locationProcessor.onLocationChanged(locationResult.getLastLocation());
+            }
+        };
         if (!requirementsChecker.areRequirementsMet()) {
             navigator.startActivity(WelcomeActivity.class);
             finish();
@@ -115,7 +143,7 @@ public class MapActivity extends BaseActivity<UiMapBinding, MapMvvm.ViewModel> i
         viewModel.getBottomSheetHidden().observe(this, new Observer() {
             @Override
             public void onChanged(@Nullable Object o) {
-                if(Boolean.class.cast(o)) {
+                if (Boolean.class.cast(o)) {
                     setBottomSheetHidden();
                 } else {
                     setBottomSheetCollapsed();
@@ -125,7 +153,7 @@ public class MapActivity extends BaseActivity<UiMapBinding, MapMvvm.ViewModel> i
         viewModel.getCenter().observe(this, new Observer() {
             @Override
             public void onChanged(@Nullable Object o) {
-                if(o != null) {
+                if (o != null) {
                     updateCamera(LatLng.class.cast(o));
                 }
             }
@@ -140,21 +168,21 @@ public class MapActivity extends BaseActivity<UiMapBinding, MapMvvm.ViewModel> i
             Timber.v("for contact: %s", c.getId());
 
             binding.contactPeek.name.setText(c.getFusedName());
-            if(c.hasLocation()) {
+            if (c.hasLocation()) {
                 contactImageProvider.setImageViewAsync(binding.contactPeek.image, c);
                 geocodingProvider.resolve(c.getMessageLocation(), binding.contactPeek.location);
                 BindingConversions.setRelativeTimeSpanString(binding.contactPeek.locationDate, c.getTst());
-                binding.acc.setText(c.getFusedLocationAccuracy()+" m");
+                binding.acc.setText(c.getFusedLocationAccuracy() + " m");
                 binding.tid.setText(c.getTrackerId());
                 binding.id.setText(c.getId());
-                if(viewModel.hasLocation()) {
+                if (viewModel.hasLocation()) {
                     binding.distance.setVisibility(View.VISIBLE);
                     binding.distanceLabel.setVisibility(View.VISIBLE);
 
                     float[] distance = new float[2];
-                    Location.distanceBetween(viewModel.getCurrentLocation().latitude, viewModel.getCurrentLocation().longitude, c.getLatLng().latitude,c.getLatLng().longitude , distance);
+                    Location.distanceBetween(viewModel.getCurrentLocation().latitude, viewModel.getCurrentLocation().longitude, c.getLatLng().latitude, c.getLatLng().longitude, distance);
 
-                    binding.distance.setText(Math.round(distance[0])+" m");
+                    binding.distance.setText(Math.round(distance[0]) + " m");
                 } else {
                     binding.distance.setVisibility(View.GONE);
                     binding.distanceLabel.setVisibility(View.GONE);
@@ -180,7 +208,6 @@ public class MapActivity extends BaseActivity<UiMapBinding, MapMvvm.ViewModel> i
         }
 
     }
-
 
 
     @Override
@@ -216,6 +243,19 @@ public class MapActivity extends BaseActivity<UiMapBinding, MapMvvm.ViewModel> i
             isMapReady = false;
         }
         handleIntentExtras(getIntent());
+
+
+    }
+
+
+    private LocationRequest getHighPowerLocationRequest() {
+        LocationRequest request = new LocationRequest();
+        request.setInterval(TimeUnit.SECONDS.toMillis(TimeUnit.SECONDS.toMillis(1)));
+        request.setMaxWaitTime(2 * TimeUnit.SECONDS.toMillis(TimeUnit.SECONDS.toMillis(10)));
+        request.setFastestInterval(TimeUnit.SECONDS.toMillis(10));
+        request.setSmallestDisplacement(50);
+        request.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
+        return request;
     }
 
     @Override
@@ -261,7 +301,7 @@ public class MapActivity extends BaseActivity<UiMapBinding, MapMvvm.ViewModel> i
         try {
             if (binding.mapView != null)
                 binding.mapView.onLowMemory();
-        } catch (Exception ignored){
+        } catch (Exception ignored) {
             isMapReady = false;
         }
     }
@@ -282,7 +322,8 @@ public class MapActivity extends BaseActivity<UiMapBinding, MapMvvm.ViewModel> i
         isMapReady = false;
         try {
             binding.mapView.getMapAsync(this);
-        } catch (Exception ignored) { }
+        } catch (Exception ignored) {
+        }
     }
 
     public boolean onCreateOptionsMenu(Menu menu) {
@@ -342,13 +383,13 @@ public class MapActivity extends BaseActivity<UiMapBinding, MapMvvm.ViewModel> i
         preferences.setMonitoringNext();
 
         int newmode = preferences.getMonitoring();
-        if(newmode == LocationProcessor.MONITORING_QUIET) {
+        if (newmode == LocationProcessor.MONITORING_QUIET) {
             Toast.makeText(this, R.string.monitoring_quiet, Toast.LENGTH_SHORT).show();
-        }else if (newmode == LocationProcessor.MONITORING_MANUAL)  {
+        } else if (newmode == LocationProcessor.MONITORING_MANUAL) {
             Toast.makeText(this, R.string.monitoring_manual, Toast.LENGTH_SHORT).show();
-        } else if (newmode == LocationProcessor.MONITORING_SIGNIFFICANT)  {
+        } else if (newmode == LocationProcessor.MONITORING_SIGNIFFICANT) {
             Toast.makeText(this, R.string.monitoring_signifficant, Toast.LENGTH_SHORT).show();
-        } else  {
+        } else {
             Toast.makeText(this, R.string.monitoring_move, Toast.LENGTH_SHORT).show();
         }
 
@@ -398,7 +439,7 @@ public class MapActivity extends BaseActivity<UiMapBinding, MapMvvm.ViewModel> i
 
 
     public void updateCamera(@NonNull LatLng latLng) {
-        if(isMapReady)
+        if (isMapReady)
             mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(latLng, ZOOM_LEVEL_STREET));
     }
 
@@ -411,11 +452,11 @@ public class MapActivity extends BaseActivity<UiMapBinding, MapMvvm.ViewModel> i
 
     @Override
     public void removeMarker(@Nullable FusedContact contact) {
-        if(contact == null)
+        if (contact == null)
             return;
 
         Marker m = mMarkers.get(contact.getId());
-        if(m != null)
+        if (m != null)
             m.remove();
     }
 
@@ -490,7 +531,7 @@ public class MapActivity extends BaseActivity<UiMapBinding, MapMvvm.ViewModel> i
     @Override
     public void setBottomSheetHidden() {
         bottomSheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
-        if(mMenu != null)
+        if (mMenu != null)
             mMenu.close();
     }
 
@@ -502,5 +543,4 @@ public class MapActivity extends BaseActivity<UiMapBinding, MapMvvm.ViewModel> i
             popupMenu.getMenu().removeItem(R.id.menu_clear);
         popupMenu.show();
     }
-
 }

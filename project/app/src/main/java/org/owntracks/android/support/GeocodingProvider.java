@@ -7,13 +7,12 @@ import android.support.annotation.CallSuper;
 import android.support.v4.util.LruCache;
 import android.widget.TextView;
 
-import org.owntracks.android.App;
 import org.owntracks.android.R;
 import org.owntracks.android.injection.qualifier.AppContext;
 import org.owntracks.android.injection.scopes.PerApplication;
 import org.owntracks.android.messages.MessageLocation;
 import org.owntracks.android.model.FusedContact;
-import org.owntracks.android.services.BackgroundService;
+import org.owntracks.android.services.LocationService;
 
 import java.lang.ref.WeakReference;
 import java.util.Locale;
@@ -76,7 +75,7 @@ public class GeocodingProvider {
         }
     }
 
-    public void resolve(MessageLocation m, BackgroundService s) {
+    public void resolve(MessageLocation m, LocationService s) {
         if(m.hasGeocoder()) {
             s.onGeocodingProviderResult(m);
             return;
@@ -92,13 +91,13 @@ public class GeocodingProvider {
 
     private static class NotificationLocationResolverTask extends MessageLocationResolverTask {
 
-        private final WeakReference<BackgroundService> service;
+        private final WeakReference<LocationService> service;
 
-        static void run(MessageLocation m, BackgroundService s) {
+        static void run(MessageLocation m, LocationService s) {
             (new NotificationLocationResolverTask(m, s)).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
         }
 
-        NotificationLocationResolverTask(MessageLocation m, BackgroundService service) {
+        NotificationLocationResolverTask(MessageLocation m, LocationService service) {
             super(m);
             this.service = new WeakReference<>(service);
         }
@@ -107,7 +106,7 @@ public class GeocodingProvider {
         protected void onPostExecute(String result) {
             super.onPostExecute(result);
             MessageLocation m = this.message.get();
-            BackgroundService s = this.service.get();
+            LocationService s = this.service.get();
             if(m!=null && s!=null) {
                 s.onGeocodingProviderResult(m);
             }

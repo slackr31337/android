@@ -3,7 +3,7 @@ package org.owntracks.android.injection.modules.android.ServiceModules;
 import android.app.Service;
 
 import org.owntracks.android.injection.scopes.PerActivity;
-import org.owntracks.android.services.BackgroundService;
+import org.owntracks.android.services.LocationService;
 
 import dagger.Binds;
 import dagger.Module;
@@ -13,6 +13,6 @@ public abstract class BackgroundServiceModule {
 
     @Binds
     @PerActivity
-    abstract Service bindService(BackgroundService s);
+    abstract Service bindService(LocationService s);
 
 }

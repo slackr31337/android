@@ -133,7 +133,6 @@ public class LocationProcessor {
 
     public void onLocationChanged(@NonNull Location l) {
         locationRepo.setCurrentLocation(l);
-
         publishLocationMessage(MessageLocation.REPORT_TYPE_DEFAULT);
     }
 

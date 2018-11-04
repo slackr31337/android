@@ -1,11 +1,14 @@
 package org.owntracks.android.ui.base;
 
+import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.databinding.DataBindingUtil;
 import android.databinding.ViewDataBinding;
+import android.location.Location;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.support.annotation.CallSuper;
@@ -15,20 +18,22 @@ import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentManager;
+import android.support.v4.content.LocalBroadcastManager;
 import android.support.v7.widget.Toolbar;
+import android.widget.Toast;
 
 import org.greenrobot.eventbus.EventBus;
-import org.owntracks.android.App;
 import org.owntracks.android.BR;
 import org.owntracks.android.R;
 import org.owntracks.android.injection.modules.android.ActivityModules.BaseActivityModule;
-import org.owntracks.android.services.BackgroundService;
+import org.owntracks.android.services.LocationService;
 import org.owntracks.android.support.DrawerProvider;
 import org.owntracks.android.support.Preferences;
 import org.owntracks.android.support.RequirementsChecker;
 import org.owntracks.android.ui.base.navigator.Navigator;
 import org.owntracks.android.ui.base.view.MvvmView;
 import org.owntracks.android.ui.base.viewmodel.MvvmViewModel;
+import org.owntracks.android.ui.map.MapActivity;
 
 import javax.inject.Inject;
 import javax.inject.Named;
@@ -58,6 +63,7 @@ public abstract class BaseActivity<B extends ViewDataBinding, V extends MvvmView
 
     private boolean hasEventBus = true;
     private boolean disablesAnimation = false;
+    private MyReceiver myReceiver;
 
     protected void setHasEventBus(boolean enable) {
         this.hasEventBus = enable;
@@ -78,7 +84,7 @@ public abstract class BaseActivity<B extends ViewDataBinding, V extends MvvmView
     }
 
 
-    private BackgroundService mService;
+    private LocationService mService;
     private boolean mBound;
 
     protected boolean isBound() {
@@ -91,7 +97,7 @@ public abstract class BaseActivity<B extends ViewDataBinding, V extends MvvmView
         @Override
         public void onServiceConnected(ComponentName name, IBinder service) {
             if (service != null) {
-                BackgroundService.LocalBinder binder = (BackgroundService.LocalBinder) service;
+                LocationService.LocalBinder binder = (LocationService.LocalBinder) service;
                 mService = binder.getService();
                 mBound = true;
             }
@@ -136,7 +142,7 @@ public abstract class BaseActivity<B extends ViewDataBinding, V extends MvvmView
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
-
+        myReceiver = new MyReceiver();
         disablesAnimation = (getIntent().getFlags() & Intent.FLAG_ACTIVITY_NO_ANIMATION) != 0;
     }
 
@@ -160,7 +166,7 @@ public abstract class BaseActivity<B extends ViewDataBinding, V extends MvvmView
 
         super.onStart();
 
-        bindService(new Intent(this, BackgroundService.class), mServiceConnection, Context.BIND_AUTO_CREATE);
+        bindService(new Intent(this, LocationService.class), mServiceConnection, Context.BIND_AUTO_CREATE);
     }
 
 
@@ -191,6 +197,7 @@ public abstract class BaseActivity<B extends ViewDataBinding, V extends MvvmView
 
         if (hasEventBus && !eventBus.isRegistered(viewModel))
             eventBus.register(viewModel);
+        LocalBroadcastManager.getInstance(this).registerReceiver(myReceiver, new IntentFilter(LocationService.ACTION_BROADCAST));
     }
 
     @Override
@@ -204,11 +211,23 @@ public abstract class BaseActivity<B extends ViewDataBinding, V extends MvvmView
             overridePendingTransition(0, 0);
         else
             overridePendingTransition(R.anim.push_up_in, R.anim.none);
+
+        LocalBroadcastManager.getInstance(this).unregisterReceiver(myReceiver);
     }
 
     protected final void addFragment(@IdRes int containerViewId, Fragment fragment) {
         fragmentManager.beginTransaction()
                 .add(containerViewId, fragment)
                 .commit();
+    }
+
+    private class MyReceiver extends BroadcastReceiver {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            Location location = intent.getParcelableExtra(LocationService.EXTRA_LOCATION);
+            if (location != null) {
+                Toast.makeText(BaseActivity.this, "Received Location", Toast.LENGTH_LONG).show(); // Just for test purposes
+            }
+        }
     }
 }

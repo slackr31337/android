@@ -13,6 +13,7 @@ import org.owntracks.android.injection.modules.android.ActivityModules.WelcomeAc
 import org.owntracks.android.injection.modules.android.ServiceModules.BackgroundServiceModule;
 import org.owntracks.android.injection.scopes.PerActivity;
 import org.owntracks.android.injection.scopes.PerService;
+import org.owntracks.android.services.LocationService;
 
 import dagger.Module;
 import dagger.android.ContributesAndroidInjector;
@@ -61,6 +62,6 @@ public abstract class AndroindBindingModule {
 
     @PerService
     @ContributesAndroidInjector(modules = {BackgroundServiceModule.class})
-    abstract org.owntracks.android.services.BackgroundService bindBackgroundService();
+    abstract LocationService bindBackgroundService();
 
 }
